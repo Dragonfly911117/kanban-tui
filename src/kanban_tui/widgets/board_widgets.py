@@ -72,6 +72,7 @@ class KanbanBoard(HorizontalScroll):
 
     BINDINGS = [
         Binding("n", "new_task", "New Task", show=True, priority=True),
+        Binding("N", "search_prev", show=False),
         Binding("j,down", "navigation('down')", "Down", show=False),
         Binding("k, up", "navigation('up')", "Up", show=False),
         Binding("h, left", "navigation('left')", "Left", show=False),
@@ -90,6 +91,7 @@ class KanbanBoard(HorizontalScroll):
 
     async def on_mount(self):
         self._search_matches: list[int] = []
+        self._search_match_index: int = -1
         await self.populate_board()
 
     async def populate_board(self, *args):
@@ -230,6 +232,7 @@ class KanbanBoard(HorizontalScroll):
     def apply_search(self, query: str) -> None:
         query_lower = query.lower().strip()
         self._search_matches = []
+        self._search_match_index = -1
         for task_card in self.query(TaskCard):
             task_card.remove_class("search-dim", "search-match")
             if not query_lower:
@@ -244,20 +247,45 @@ class KanbanBoard(HorizontalScroll):
         for task_card in self.query(TaskCard):
             task_card.remove_class("search-dim", "search-match")
         self._search_matches = []
+        self._search_match_index = -1
 
-    def focus_first_search_match(self) -> bool:
+    def _focus_match_at_index(self) -> bool:
         if not self._search_matches:
             return False
-        card = self.query_one_optional(
-            f"#taskcard_{self._search_matches[0]}", TaskCard
-        )
+        task_id = self._search_matches[self._search_match_index]
+        card = self.query_one_optional(f"#taskcard_{task_id}", TaskCard)
         if card:
             card.focus()
             return True
         return False
 
+    def focus_next_search_match(self) -> bool:
+        if not self._search_matches:
+            return False
+        self._search_match_index = (self._search_match_index + 1) % len(
+            self._search_matches
+        )
+        return self._focus_match_at_index()
+
+    def focus_prev_search_match(self) -> bool:
+        if not self._search_matches:
+            return False
+        self._search_match_index = (self._search_match_index - 1) % len(
+            self._search_matches
+        )
+        return self._focus_match_at_index()
+
     def action_new_task(self) -> None:
+        search_bar = self.screen.query_one_optional(TaskSearchBar)
+        if search_bar is not None and search_bar.display:
+            if not self.focus_next_search_match():
+                self.app.notify("No matching tasks", severity="warning", timeout=2)
+            return
         self.app.push_screen(ModalTaskEditScreen(), callback=self.place_new_task)
+
+    def action_search_prev(self) -> None:
+        if not self.focus_prev_search_match():
+            self.app.notify("No matching tasks", severity="warning", timeout=2)
 
     async def action_show_boards(self) -> None:
         await self.app.push_screen(
