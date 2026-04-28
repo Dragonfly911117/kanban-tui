@@ -24,6 +24,8 @@ from textual.widgets import (
 from textual.containers import Horizontal, Vertical, VerticalGroup
 from rich.text import Text
 
+from textual.validation import Validator, ValidationResult
+
 from kanban_tui.config import MovementModes, TaskAppendModes
 from kanban_tui.widgets.modal_task_widgets import VimSelect
 from kanban_tui.widgets.custom_widgets import IconButton
@@ -709,6 +711,111 @@ class StatusColumnSelector(Vertical):
                 ).value = self.app.active_board.finish_column
 
 
+class IsValidColorOrEmpty(Validator):
+    """Accepts either an empty string (clears override) or a valid CSS color."""
+
+    def validate(self, value: str) -> ValidationResult:
+        if not value:
+            return self.success()
+        return self.success() if IsValidColor.color_can_be_parsed(value) else self.failure("invalid color")
+
+
+class BoardThemeSelector(Horizontal):
+    app: "KanbanTui"
+
+    def on_mount(self):
+        self.border_title = "board.theme"
+
+    def compose(self) -> Iterable[Widget]:
+        yield Label("Theme")
+        themes = sorted(k for k in self.app.available_themes.keys() if k != "kanban-custom")
+        current = self.app.config.board.theme
+        with self.prevent(Select.Changed):
+            theme_select = VimSelect.from_values(
+                themes,
+                value=current if current in themes else themes[0],
+                id="select_theme",
+                allow_blank=False,
+            )
+            theme_select.jump_mode = "focus"
+            yield theme_select
+
+    @on(Select.Changed, "#select_theme")
+    def update_theme(self, event: Select.Changed) -> None:
+        self.app.theme = event.value
+        self.app.apply_extended_theme()
+
+
+class ThemeColorsSelector(Vertical):
+    """Four color-override inputs for the key theme variables."""
+
+    app: "KanbanTui"
+    FIELDS: list[tuple[str, str]] = [
+        ("primary", "Primary"),
+        ("success", "Success"),
+        ("warning", "Warning"),
+        ("error", "Error"),
+    ]
+
+    def on_mount(self) -> None:
+        self.border_title = "board.theme_colors  (empty = use theme default)"
+        colors = self.app.config.board.theme_colors
+        for field, _ in self.FIELDS:
+            value = getattr(colors, field)
+            if value:
+                self.query_one(f"#theme_color_{field}", Input).styles.background = value
+
+    def compose(self) -> Iterable[Widget]:
+        colors = self.app.config.board.theme_colors
+        with self.prevent(Input.Changed):
+            with Horizontal(classes="setting-horizontal"):
+                for field, label in self.FIELDS[:2]:
+                    with Horizontal(classes="setting-block theme-color-block"):
+                        yield Label(label)
+                        yield Input(
+                            value=getattr(colors, field),
+                            placeholder="#rrggbb or empty",
+                            id=f"theme_color_{field}",
+                            validators=[IsValidColorOrEmpty()],
+                            validate_on=["changed", "blur"],
+                        )
+            with Horizontal(classes="setting-horizontal"):
+                for field, label in self.FIELDS[2:]:
+                    with Horizontal(classes="setting-block theme-color-block"):
+                        yield Label(label)
+                        yield Input(
+                            value=getattr(colors, field),
+                            placeholder="#rrggbb or empty",
+                            id=f"theme_color_{field}",
+                            validators=[IsValidColorOrEmpty()],
+                            validate_on=["changed", "blur"],
+                        )
+
+    @on(Input.Changed)
+    def update_theme_color(self, event: Input.Changed) -> None:
+        if event.input.id is None:
+            return
+        field = event.input.id.removeprefix("theme_color_")
+        if field not in {f for f, _ in self.FIELDS}:
+            return
+        value = event.input.value.strip()
+        is_valid = (not value) or bool(
+            event.validation_result and event.validation_result.is_valid
+        )
+        if not is_valid:
+            return
+        event.input.styles.background = value if value else self.app.config.task.default_color
+        self.app.config.set_theme_color(field, value)
+        self.app.apply_extended_theme()
+
+    @on(DescendantBlur)
+    def reset_color_inputs(self) -> None:
+        colors = self.app.config.board.theme_colors
+        for field, _ in self.FIELDS:
+            inp = self.query_one(f"#theme_color_{field}", Input)
+            inp.value = getattr(colors, field)
+
+
 class SettingsView(Vertical):
     app: "KanbanTui"
 
@@ -724,6 +831,8 @@ class SettingsView(Vertical):
         with Horizontal(classes="setting-horizontal"):
             yield BoardColumnsInView(classes="setting-block")
             yield BoardAutoRefreshSelector(classes="setting-block")
+            yield BoardThemeSelector(classes="setting-block")
+        yield ThemeColorsSelector(classes="setting-block")
         with Horizontal(classes="setting-horizontal"):
             yield StatusColumnSelector(classes="setting-block")
             yield ColumnSelector(classes="setting-block")
