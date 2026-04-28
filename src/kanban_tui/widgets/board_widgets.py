@@ -73,6 +73,7 @@ class KanbanBoard(HorizontalScroll):
     BINDINGS = [
         Binding("n", "new_task", "New Task", show=True, priority=True),
         Binding("N", "search_prev", show=False),
+        Binding("escape", "dismiss_search", show=False),
         Binding("j,down", "navigation('down')", "Down", show=False),
         Binding("k, up", "navigation('up')", "Up", show=False),
         Binding("h, left", "navigation('left')", "Left", show=False),
@@ -286,6 +287,28 @@ class KanbanBoard(HorizontalScroll):
     def action_search_prev(self) -> None:
         if not self.focus_prev_search_match():
             self.app.notify("No matching tasks", severity="warning", timeout=2)
+
+    def action_dismiss_search(self) -> None:
+        search_bar = self.screen.query_one_optional(TaskSearchBar)
+        if search_bar is not None:
+            search_bar.post_message(TaskSearchBar.Dismissed())
+
+    def _search_bar_active(self) -> bool:
+        bar = self.screen.query_one_optional(TaskSearchBar)
+        return bar is not None and bar.display
+
+    def _search_input_focused(self) -> bool:
+        return isinstance(self.app.focused, Input) and self.app.focused.id == "search_input"
+
+    def check_action(self, action: str, params: tuple) -> bool | None:
+        match action:
+            case "new_task" | "search_prev":
+                # Let the Input receive the key when the user is typing in the search box
+                if self._search_input_focused():
+                    return False
+            case "dismiss_search":
+                return self._search_bar_active()
+        return None
 
     async def action_show_boards(self) -> None:
         await self.app.push_screen(

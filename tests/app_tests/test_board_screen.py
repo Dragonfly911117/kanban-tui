@@ -6,7 +6,7 @@ from kanban_tui.app import KanbanTui
 from textual.widgets import Input, Button, Label
 from kanban_tui.config import Backends, MovementModes
 from kanban_tui.screens.board_screen import BoardScreen
-from kanban_tui.widgets.board_widgets import KanbanBoard
+from kanban_tui.widgets.board_widgets import KanbanBoard, TaskSearchBar
 from kanban_tui.modal.modal_task_screen import ModalTaskEditScreen
 from kanban_tui.modal.modal_board_screen import (
     ModalBoardOverviewScreen,
@@ -486,3 +486,159 @@ async def test_custom_footer_backend_switcher(test_app: KanbanTui):
     async with test_app.run_test(size=APP_SIZE) as pilot:
         assert not pilot.app.screen.query_one(VimSelect).display
         assert pilot.app.screen.query_one(VimSelect).value == f"✔  {Backends.SQLITE}"
+
+
+# ── Search feature tests ──────────────────────────────────────────────────────
+
+
+async def test_search_bar_opens_on_slash(test_app: KanbanTui):
+    async with test_app.run_test(size=APP_SIZE) as pilot:
+        search_bar = pilot.app.screen.query_one(TaskSearchBar)
+        assert not search_bar.display
+
+        await pilot.press("/")
+        assert search_bar.display
+        assert isinstance(pilot.app.focused, Input)
+        assert pilot.app.focused.id == "search_input"
+
+
+async def test_search_filters_task_cards(test_app: KanbanTui):
+    async with test_app.run_test(size=APP_SIZE) as pilot:
+        await pilot.press("/")
+        # Type "ready" — n has priority binding but check_action disables it when
+        # the search Input is focused, so each character lands in the Input.
+        for ch in "ready":
+            await pilot.press(ch)
+        await pilot.pause()
+
+        for card in pilot.app.screen.query(TaskCard).results():
+            if "ready" in card.task_.title.lower():
+                assert card.has_class("search-match"), f"{card.task_.title} should be search-match"
+            else:
+                assert card.has_class("search-dim"), f"{card.task_.title} should be search-dim"
+
+
+async def test_search_escape_from_input_closes_and_clears(test_app: KanbanTui):
+    async with test_app.run_test(size=APP_SIZE) as pilot:
+        search_bar = pilot.app.screen.query_one(TaskSearchBar)
+        await pilot.press("/")
+        for ch in "ready":
+            await pilot.press(ch)
+        await pilot.pause()
+
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert not search_bar.display
+        for card in pilot.app.screen.query(TaskCard).results():
+            assert not card.has_class("search-match")
+            assert not card.has_class("search-dim")
+
+
+async def test_search_enter_focuses_match_bar_stays_open(test_app: KanbanTui):
+    async with test_app.run_test(size=APP_SIZE) as pilot:
+        search_bar = pilot.app.screen.query_one(TaskSearchBar)
+        await pilot.press("/")
+        for ch in "ready":
+            await pilot.press(ch)
+        await pilot.pause()
+
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # Bar stays open, a matching TaskCard is now focused
+        assert search_bar.display
+        assert isinstance(pilot.app.focused, TaskCard)
+        assert "ready" in pilot.app.focused.task_.title.lower()
+
+
+async def test_search_enter_empty_query_is_noop(test_app: KanbanTui):
+    async with test_app.run_test(size=APP_SIZE) as pilot:
+        search_bar = pilot.app.screen.query_one(TaskSearchBar)
+        await pilot.press("/")
+        # No query typed
+
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # Bar remains open, focus stays on the Input
+        assert search_bar.display
+        assert isinstance(pilot.app.focused, Input)
+
+
+async def test_search_n_cycles_to_next_match(test_app: KanbanTui):
+    async with test_app.run_test(size=APP_SIZE) as pilot:
+        await pilot.press("/")
+        for ch in "ready":
+            await pilot.press(ch)
+        await pilot.pause()
+
+        # Enter focuses first match
+        await pilot.press("enter")
+        await pilot.pause()
+        first_id = pilot.app.focused.task_.task_id
+
+        # n focuses second match
+        await pilot.press("n")
+        await pilot.pause()
+        second_id = pilot.app.focused.task_.task_id
+
+        assert first_id != second_id
+        assert isinstance(pilot.app.focused, TaskCard)
+        assert "ready" in pilot.app.focused.task_.title.lower()
+        # Search bar still open
+        assert pilot.app.screen.query_one(TaskSearchBar).display
+
+
+async def test_search_N_cycles_to_previous_match(test_app: KanbanTui):
+    async with test_app.run_test(size=APP_SIZE) as pilot:
+        await pilot.press("/")
+        for ch in "ready":
+            await pilot.press(ch)
+        await pilot.pause()
+
+        await pilot.press("enter")
+        await pilot.pause()
+        first_id = pilot.app.focused.task_.task_id
+
+        # Advance to next, then go back
+        await pilot.press("n")
+        await pilot.pause()
+        await pilot.press("N")
+        await pilot.pause()
+
+        assert pilot.app.focused.task_.task_id == first_id
+
+
+async def test_search_escape_from_task_card_closes_search(test_app: KanbanTui):
+    async with test_app.run_test(size=APP_SIZE) as pilot:
+        search_bar = pilot.app.screen.query_one(TaskSearchBar)
+        await pilot.press("/")
+        for ch in "ready":
+            await pilot.press(ch)
+        await pilot.pause()
+
+        # Navigate to a match so a TaskCard holds focus
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(pilot.app.focused, TaskCard)
+        assert search_bar.display
+
+        # Escape from the TaskCard should dismiss the search
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert not search_bar.display
+        assert isinstance(pilot.app.focused, TaskCard)
+        for card in pilot.app.screen.query(TaskCard).results():
+            assert not card.has_class("search-match")
+            assert not card.has_class("search-dim")
+
+
+async def test_n_creates_task_when_search_not_active(no_task_app: KanbanTui):
+    async with no_task_app.run_test(size=APP_SIZE) as pilot:
+        search_bar = pilot.app.screen.query_one(TaskSearchBar)
+        assert not search_bar.display
+
+        await pilot.press("n")
+        assert isinstance(pilot.app.screen, ModalTaskEditScreen)
