@@ -36,10 +36,18 @@ class TaskAppendModes(StrEnum):
     BOTTOM = "bottom"
 
 
+class ThemeColors(BaseModel):
+    primary: str = Field(default="")
+    success: str = Field(default="")
+    warning: str = Field(default="")
+    error: str = Field(default="")
+
+
 class BoardSettings(BaseModel):
     theme: str = Field(default="dracula")
     columns_in_view: int = Field(default=3)
     auto_refresh_interval: int = Field(default=0)
+    theme_colors: ThemeColors = Field(default_factory=ThemeColors)
 
 
 class TaskSettings(BaseModel):
@@ -96,6 +104,10 @@ class Settings(BaseSettings):
 
     def set_theme(self, new_theme: str) -> None:
         self.board.theme = new_theme
+        self.save()
+
+    def set_theme_color(self, field: str, value: str) -> None:
+        setattr(self.board.theme_colors, field, value)
         self.save()
 
     def set_auto_refresh_interval(self, new_interval: int) -> None:
