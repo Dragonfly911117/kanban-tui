@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os
 from contextvars import ContextVar
-from typing import Type
+from typing import Literal, Type
 from pathlib import Path
 from enum import StrEnum
 
@@ -36,10 +36,51 @@ class TaskAppendModes(StrEnum):
     BOTTOM = "bottom"
 
 
+class ThemeColors(BaseModel):
+    primary: str = Field(default="")
+    success: str = Field(default="")
+    warning: str = Field(default="")
+    error: str = Field(default="")
+
+
+class CustomThemeDefinition(BaseModel):
+    """A user-defined theme loaded from the TOML config.
+
+    Specify a ``base`` (any built-in Textual theme name) and override any
+    subset of the color fields.  Unset fields (empty string / None) inherit
+    the base theme's value.
+
+    Example TOML::
+
+        [[board.custom_themes]]
+        name = "my-theme"
+        base = "dracula"
+        primary = "#ff6600"
+        success = "#00cc66"
+    """
+
+    name: str
+    base: str = Field(default="dracula")
+    primary: str = Field(default="")
+    secondary: str = Field(default="")
+    warning: str = Field(default="")
+    error: str = Field(default="")
+    success: str = Field(default="")
+    accent: str = Field(default="")
+    foreground: str = Field(default="")
+    background: str = Field(default="")
+    surface: str = Field(default="")
+    panel: str = Field(default="")
+    dark: bool | None = Field(default=None)
+    variables: dict[str, str] = Field(default_factory=dict)
+
+
 class BoardSettings(BaseModel):
     theme: str = Field(default="dracula")
     columns_in_view: int = Field(default=3)
     auto_refresh_interval: int = Field(default=0)
+    theme_colors: ThemeColors = Field(default_factory=ThemeColors)
+    custom_themes: list[CustomThemeDefinition] = Field(default_factory=list)
 
 
 class TaskSettings(BaseModel):
@@ -96,6 +137,14 @@ class Settings(BaseSettings):
 
     def set_theme(self, new_theme: str) -> None:
         self.board.theme = new_theme
+        self.save()
+
+    def set_theme_color(
+        self,
+        field: Literal["primary", "success", "warning", "error"],
+        value: str,
+    ) -> None:
+        setattr(self.board.theme_colors, field, value)
         self.save()
 
     def set_auto_refresh_interval(self, new_interval: int) -> None:

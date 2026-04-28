@@ -28,6 +28,7 @@ class SettingsScreen(Screen):
                 "switch_expand_metadata": "m",
                 "select_columns_in_view": "b",
                 "select_auto_refresh_interval": "a",
+                "select_theme": "t",
                 "task_color_preview": "g",
                 "select_movement_mode": "n",
                 "select_append_mode": "p",
