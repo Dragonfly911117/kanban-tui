@@ -8,11 +8,13 @@ if TYPE_CHECKING:
 
 
 from textual import on
+from textual.app import ComposeResult
 from textual.events import MouseDown, MouseMove, MouseUp
 from textual.binding import Binding
+from textual.message import Message
 from textual.reactive import reactive
-from textual.containers import HorizontalScroll, VerticalScroll
-from textual.widgets import Label
+from textual.containers import Horizontal, HorizontalScroll, VerticalScroll
+from textual.widgets import Input, Label
 
 from kanban_tui.widgets.task_column import Column
 from kanban_tui.widgets.task_card import TaskCard
@@ -20,6 +22,49 @@ from kanban_tui.modal.modal_task_screen import ModalTaskEditScreen
 from kanban_tui.modal.modal_board_screen import ModalBoardOverviewScreen
 from kanban_tui.classes.task import Task
 from kanban_tui.config import Backends
+
+
+class TaskSearchBar(Horizontal):
+    """Vim-like / search bar that filters task cards by title."""
+
+    BINDINGS = [
+        Binding("escape", "dismiss_search", "Dismiss", show=False, priority=True),
+    ]
+
+    class SearchChanged(Message):
+        def __init__(self, query: str) -> None:
+            self.query = query
+            super().__init__()
+
+    class Submitted(Message):
+        pass
+
+    class Dismissed(Message):
+        pass
+
+    def compose(self) -> ComposeResult:
+        yield Label("/")
+        yield Input(placeholder="search tasks...", id="search_input")
+
+    def open(self) -> None:
+        self.display = True
+        self.query_one("#search_input", Input).focus()
+        self.query_one("#search_input", Input).value = ""
+
+    def close(self) -> None:
+        self.display = False
+        self.query_one("#search_input", Input).value = ""
+
+    @on(Input.Changed, "#search_input")
+    def _input_changed(self, event: Input.Changed) -> None:
+        self.post_message(self.SearchChanged(event.value))
+
+    @on(Input.Submitted, "#search_input")
+    def _input_submitted(self, event: Input.Submitted) -> None:
+        self.post_message(self.Submitted())
+
+    def action_dismiss_search(self) -> None:
+        self.post_message(self.Dismissed())
 
 
 class KanbanBoard(HorizontalScroll):
@@ -33,6 +78,7 @@ class KanbanBoard(HorizontalScroll):
         Binding("l, right", "navigation('right')", "Right", show=False),
         Binding("B", "show_boards", "Show Boards", show=True, priority=True),
         Binding("enter", "confirm_move", "Confirm Move", show=True, priority=True),
+        Binding("/", "open_search", "Search", show=True),
     ]
     selected_task: reactive[Task | None] = reactive(None)
     target_column: reactive[int | None] = reactive(None, bindings=True, init=False)
@@ -43,6 +89,7 @@ class KanbanBoard(HorizontalScroll):
     drag_target_before: bool | None = None
 
     async def on_mount(self):
+        self._search_matches: list[int] = []
         await self.populate_board()
 
     async def populate_board(self, *args):
@@ -176,6 +223,38 @@ class KanbanBoard(HorizontalScroll):
                 return False
 
         return True
+
+    def action_open_search(self) -> None:
+        self.screen.query_one(TaskSearchBar).open()
+
+    def apply_search(self, query: str) -> None:
+        query_lower = query.lower().strip()
+        self._search_matches = []
+        for task_card in self.query(TaskCard):
+            task_card.remove_class("search-dim", "search-match")
+            if not query_lower:
+                continue
+            if query_lower in task_card.task_.title.lower():
+                task_card.add_class("search-match")
+                self._search_matches.append(task_card.task_.task_id)
+            else:
+                task_card.add_class("search-dim")
+
+    def clear_search(self) -> None:
+        for task_card in self.query(TaskCard):
+            task_card.remove_class("search-dim", "search-match")
+        self._search_matches = []
+
+    def focus_first_search_match(self) -> bool:
+        if not self._search_matches:
+            return False
+        card = self.query_one_optional(
+            f"#taskcard_{self._search_matches[0]}", TaskCard
+        )
+        if card:
+            card.focus()
+            return True
+        return False
 
     def action_new_task(self) -> None:
         self.app.push_screen(ModalTaskEditScreen(), callback=self.place_new_task)
