@@ -555,6 +555,34 @@ DataBasePathInput{
     }
 
 }
+
+BoardThemeSelector {
+    height: auto;
+    Label {
+        width: auto;
+        padding: 1 0 0 1;
+    }
+}
+
+ThemeColorsSelector {
+    height: auto;
+    width: 1fr;
+
+    .theme-color-block {
+        height: auto;
+        width: 1fr;
+        Label {
+            width: auto;
+            padding: 1 1 0 1;
+        }
+        Input {
+            width: 1fr;
+            height: 3;
+            border-title-align: right;
+            color: auto;
+        }
+    }
+}
 TaskAlwaysExpandedSwitch{
   height:auto;
   width:1fr;
