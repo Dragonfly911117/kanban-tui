@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os
 from contextvars import ContextVar
-from typing import Type
+from typing import Literal, Type
 from pathlib import Path
 from enum import StrEnum
 
@@ -139,7 +139,11 @@ class Settings(BaseSettings):
         self.board.theme = new_theme
         self.save()
 
-    def set_theme_color(self, field: str, value: str) -> None:
+    def set_theme_color(
+        self,
+        field: Literal["primary", "success", "warning", "error"],
+        value: str,
+    ) -> None:
         setattr(self.board.theme_colors, field, value)
         self.save()
 

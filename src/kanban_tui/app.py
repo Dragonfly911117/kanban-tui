@@ -96,8 +96,7 @@ class KanbanTui(App[str | None]):
     @work()
     async def on_mount(self) -> None:
         self.register_custom_themes()
-        self.theme = self.config.board.theme
-        self.apply_extended_theme()
+        self.theme = self.config.board.theme  # triggers watch_theme -> apply_extended_theme
         self.configure_auto_refresh()
 
         if self.auth_only:

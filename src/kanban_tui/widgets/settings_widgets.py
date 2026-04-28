@@ -715,9 +715,10 @@ class IsValidColorOrEmpty(Validator):
     """Accepts either an empty string (clears override) or a valid CSS color."""
 
     def validate(self, value: str) -> ValidationResult:
-        if not value:
+        stripped = value.strip()
+        if not stripped:
             return self.success()
-        return self.success() if IsValidColor.color_can_be_parsed(value) else self.failure("invalid color")
+        return self.success() if IsValidColor.color_can_be_parsed(stripped) else self.failure("invalid color")
 
 
 class BoardThemeSelector(Horizontal):
@@ -743,7 +744,6 @@ class BoardThemeSelector(Horizontal):
     @on(Select.Changed, "#select_theme")
     def update_theme(self, event: Select.Changed) -> None:
         self.app.theme = event.value
-        self.app.apply_extended_theme()
 
 
 class ThemeColorsSelector(Vertical):
@@ -804,16 +804,25 @@ class ThemeColorsSelector(Vertical):
         )
         if not is_valid:
             return
-        event.input.styles.background = value if value else self.app.config.task.default_color
+        if value:
+            event.input.styles.background = value
+        else:
+            event.input.styles.background = ""
         self.app.config.set_theme_color(field, value)
         self.app.apply_extended_theme()
 
     @on(DescendantBlur)
-    def reset_color_inputs(self) -> None:
-        colors = self.app.config.board.theme_colors
-        for field, _ in self.FIELDS:
-            inp = self.query_one(f"#theme_color_{field}", Input)
-            inp.value = getattr(colors, field)
+    def reset_color_inputs(self, event: DescendantBlur) -> None:
+        if not isinstance(event.widget, Input):
+            return
+        inp = event.widget
+        if inp.id is None or not inp.id.startswith("theme_color_"):
+            return
+        field = inp.id.removeprefix("theme_color_")
+        saved = getattr(self.app.config.board.theme_colors, field)
+        if inp.value != saved:
+            with self.prevent(Input.Changed):
+                inp.value = saved
 
 
 class SettingsView(Vertical):
