@@ -302,14 +302,16 @@ class KanbanBoard(HorizontalScroll):
     def _search_input_focused(self) -> bool:
         return isinstance(self.app.focused, Input) and self.app.focused.id == "search_input"
 
-    def check_action(self, action: str, params: tuple) -> bool | None:
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         match action:
             case "new_task" | "search_prev":
-                # Let the Input receive the key when the user is typing in the search box
                 if self._search_input_focused():
                     return False
             case "dismiss_search":
                 return self._search_bar_active()
+            case "confirm_move":
+                if self.target_column is None:
+                    return False
         return None
 
     async def action_show_boards(self) -> None:
@@ -676,11 +678,6 @@ class KanbanBoard(HorizontalScroll):
         self.target_column = None
         self.app.app_focus = True
 
-    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
-        if action == "confirm_move":
-            if self.target_column is None:
-                return False
-        return True
 
     @on(TaskCard.Delete)
     async def delete_task(self, event: TaskCard.Delete):
