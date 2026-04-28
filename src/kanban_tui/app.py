@@ -95,6 +95,7 @@ class KanbanTui(App[str | None]):
 
     @work()
     async def on_mount(self) -> None:
+        self.register_custom_themes()
         self.theme = self.config.board.theme
         self.apply_extended_theme()
         self.configure_auto_refresh()
@@ -215,6 +216,29 @@ class KanbanTui(App[str | None]):
         if new_theme != "kanban-custom":
             self.config.set_theme(new_theme)
         self.apply_extended_theme()
+
+    def register_custom_themes(self) -> None:
+        """Register all user-defined themes from the TOML config."""
+        from dataclasses import replace as dc_replace
+        from textual.theme import Theme
+
+        for cdef in self.config.board.custom_themes:
+            base = self.available_themes.get(cdef.base)
+            if base is None:
+                self.notify(
+                    title="Unknown base theme",
+                    message=f"Custom theme '{cdef.name}' references unknown base '{cdef.base}'",
+                    severity="warning",
+                )
+                continue
+            overrides: dict = {
+                k: v
+                for k, v in cdef.model_dump(exclude={"name", "base", "variables"}).items()
+                if v not in (None, "")
+            }
+            if cdef.variables:
+                overrides["variables"] = {**base.variables, **cdef.variables}
+            self.register_theme(dc_replace(base, name=cdef.name, **overrides))
 
     def apply_extended_theme(self) -> None:
         from dataclasses import replace as dc_replace
