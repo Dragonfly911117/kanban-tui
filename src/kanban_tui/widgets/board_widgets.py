@@ -37,7 +37,9 @@ class TaskSearchBar(Horizontal):
             super().__init__()
 
     class Submitted(Message):
-        pass
+        def __init__(self, query: str) -> None:
+            self.query = query
+            super().__init__()
 
     class Dismissed(Message):
         pass
@@ -61,7 +63,7 @@ class TaskSearchBar(Horizontal):
 
     @on(Input.Submitted, "#search_input")
     def _input_submitted(self, event: Input.Submitted) -> None:
-        self.post_message(self.Submitted())
+        self.post_message(self.Submitted(event.value))
 
     def action_dismiss_search(self) -> None:
         self.post_message(self.Dismissed())
