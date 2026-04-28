@@ -77,6 +77,13 @@ def test_default_config(test_config: Settings, test_database_path: str) -> None:
             "theme": "dracula",
             "columns_in_view": 3,
             "auto_refresh_interval": 0,
+            "theme_colors": {
+                "primary": "",
+                "success": "",
+                "warning": "",
+                "error": "",
+            },
+            "custom_themes": [],
         },
         "task": {
             "always_expanded": False,
