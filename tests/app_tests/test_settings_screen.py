@@ -6,6 +6,7 @@ from kanban_tui.screens.settings_screen import SettingsScreen
 from kanban_tui.widgets.board_widgets import KanbanBoard
 from kanban_tui.widgets.task_card import TaskCard
 from kanban_tui.widgets.settings_widgets import (
+    BoardThemeSelector,
     ColumnSelector,
     AddRule,
     DataBasePathInput,
@@ -14,6 +15,7 @@ from kanban_tui.widgets.settings_widgets import (
     TaskDefaultColorSelector,
     TaskMovementSelector,
     TaskAppendModeSelector,
+    ThemeColorsSelector,
 )
 from kanban_tui.modal.modal_settings import ModalUpdateColumnScreen
 from kanban_tui.modal.modal_confirm_screen import ModalConfirmScreen
@@ -791,3 +793,75 @@ async def test_column_selector_updates_on_board_change(test_app: KanbanTui):
 
         # Columns in View also updates
         assert pilot.app.screen.query_one("#select_columns_in_view").value == 1
+
+
+# ── Theme selector tests ──────────────────────────────────────────────────────
+
+
+async def test_theme_selector_changes_config_and_app_theme(test_app: KanbanTui):
+    async with test_app.run_test(size=APP_SIZE) as pilot:
+        await pilot.press("ctrl+l")
+        await pilot.pause()
+
+        original_theme = pilot.app.config.board.theme
+        assert pilot.app.screen.query_exactly_one("#select_theme", Select).value == original_theme
+
+        # Activate the dropdown and pick the next item
+        await pilot.click("#select_theme")
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        new_theme = pilot.app.screen.query_exactly_one("#select_theme", Select).value
+        assert new_theme != original_theme
+        assert pilot.app.config.board.theme == new_theme
+        # App theme should match (or "kanban-custom" if color overrides are active)
+        assert pilot.app.theme in (new_theme, "kanban-custom")
+
+
+async def test_theme_color_override_activates_custom_theme(test_app: KanbanTui):
+    async with test_app.run_test(size=APP_SIZE) as pilot:
+        await pilot.press("ctrl+l")
+        await pilot.pause()
+
+        assert pilot.app.config.board.theme_colors.primary == ""
+        assert pilot.app.theme != "kanban-custom"
+
+        await pilot.click("#theme_color_primary")
+        await pilot.press(*"#ff6600")
+        await pilot.pause()
+
+        assert pilot.app.config.board.theme_colors.primary == "#ff6600"
+        assert pilot.app.theme == "kanban-custom"
+
+
+async def test_theme_color_clear_reverts_to_base_theme(test_app: KanbanTui):
+    async with test_app.run_test(size=APP_SIZE) as pilot:
+        await pilot.press("ctrl+l")
+        await pilot.pause()
+
+        # Set a color override first
+        await pilot.click("#theme_color_primary")
+        await pilot.press(*"#ff6600")
+        await pilot.pause()
+        assert pilot.app.config.board.theme_colors.primary == "#ff6600"
+        assert pilot.app.theme == "kanban-custom"
+
+        # Clear the override
+        await pilot.press("ctrl+a", "delete")
+        await pilot.pause()
+
+        assert pilot.app.config.board.theme_colors.primary == ""
+        assert pilot.app.theme == pilot.app.config.board.theme
+
+
+async def test_theme_selector_jumper_shortcut(test_app: KanbanTui):
+    async with test_app.run_test(size=APP_SIZE) as pilot:
+        await pilot.press("ctrl+l")
+        await pilot.pause()
+
+        await pilot.press("ctrl+o")
+        await pilot.press("t")
+        await pilot.pause()
+
+        assert pilot.app.screen.query_exactly_one(BoardThemeSelector).has_focus_within
