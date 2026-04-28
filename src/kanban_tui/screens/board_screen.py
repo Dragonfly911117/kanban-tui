@@ -39,6 +39,8 @@ class BoardScreen(Screen):
     @on(TaskSearchBar.Submitted)
     def handle_search_submitted(self, event: TaskSearchBar.Submitted) -> None:
         board = self.query_one(KanbanBoard)
+        if not board._search_matches:
+            return
         if not board.focus_next_search_match():
             self.app.notify("No matching tasks", severity="warning", timeout=2)
 

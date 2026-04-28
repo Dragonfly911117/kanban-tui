@@ -71,7 +71,7 @@ Column VerticalScroll {
 }
 TaskSearchBar {
   dock: bottom;
-  height: 1;
+  height: 3;
   display: none;
   background: $panel;
   border-top: tall $warning;
