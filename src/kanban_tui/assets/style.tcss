@@ -69,6 +69,30 @@ Column VerticalScroll {
         margin:0 2 0 0;
         scrollbar-gutter: stable;
 }
+TaskSearchBar {
+  dock: bottom;
+  height: 3;
+  display: none;
+  background: $panel;
+  border-top: tall $warning;
+
+  Label {
+    width: auto;
+    padding: 0 1;
+    color: $warning;
+    content-align: left middle;
+  }
+  Input {
+    width: 1fr;
+    height: 1;
+    border: none;
+    background: $panel;
+    &:focus {
+      border: none;
+    }
+  }
+}
+
 TaskCard {
   width: 1fr;
   height: auto;
@@ -77,6 +101,12 @@ TaskCard {
   border: tall transparent;
   transition: height 200ms linear;
   &.blinking {
+    border: tall $warning;
+  }
+  &.search-dim {
+    opacity: 0.3;
+  }
+  &.search-match {
     border: tall $warning;
   }
 }

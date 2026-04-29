@@ -17,8 +17,9 @@ from textual.screen import Screen
 from textual.worker import get_current_worker
 
 from kanban_tui.classes.board import Board
-from kanban_tui.widgets.board_widgets import KanbanBoard
+from kanban_tui.widgets.board_widgets import KanbanBoard, TaskSearchBar
 from kanban_tui.widgets.custom_widgets import KanbanTuiFooter
+from kanban_tui.widgets.task_card import TaskCard
 
 
 class BoardScreen(Screen):
@@ -28,7 +29,32 @@ class BoardScreen(Screen):
     def compose(self) -> Iterable[Widget]:
         yield KanbanBoard()
         yield Header()
+        yield TaskSearchBar()
         yield KanbanTuiFooter()
+
+    @on(TaskSearchBar.SearchChanged)
+    def handle_search_changed(self, event: TaskSearchBar.SearchChanged) -> None:
+        self.query_one(KanbanBoard).apply_search(event.query)
+
+    @on(TaskSearchBar.Submitted)
+    def handle_search_submitted(self, event: TaskSearchBar.Submitted) -> None:
+        if not event.query.strip():
+            return
+        board = self.query_one(KanbanBoard)
+        if not board.focus_next_search_match():
+            self.app.notify("No matching tasks", severity="warning", timeout=2)
+
+    @on(TaskSearchBar.Dismissed)
+    def handle_search_dismissed(self, event: TaskSearchBar.Dismissed) -> None:
+        board = self.query_one(KanbanBoard)
+        board.clear_search()
+        self.query_one(TaskSearchBar).close()
+        if board.selected_task:
+            card = board.query_one_optional(
+                f"#taskcard_{board.selected_task.task_id}", TaskCard
+            )
+            if card:
+                card.focus()
 
     def watch_active_board(self):
         if self.active_board:
